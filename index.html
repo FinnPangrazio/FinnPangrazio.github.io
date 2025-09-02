@@ -1,75 +1,70 @@
-// Grant CesiumJS access to your ion assets
-Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDA4ODc3YS0xOTM1LTRmYjYtYTU4Zi0xMzVhMWE3YTBmMjciLCJpZCI6MzMxODY5LCJpYXQiOjE3NTUxNDU0MTR9.lyGX8350fiq9RExknVy_9hssLUMsNMEERYftpQsVzjw";
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Lilydale–Warburton Rail Trail</title>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Cesium.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.120.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>html,body,#cesiumContainer{width:100%;height:100%;margin:0;padding:0;overflow:hidden}</style>
+</head>
+<body>
+<div id="cesiumContainer"></div>
+<script>
+  Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjMDA4ODc3YS0xOTM1LTRmYjYtYTU4Zi0xMzVhMWE3YTBmMjciLCJpZCI6MzMxODY5LCJpYXQiOjE3NTUxNDU0MTR9.lyGX8350fiq9RExknVy_9hssLUMsNMEERYftpQsVzjw";
 
-// Define the viewer
-const viewer = new Cesium.Viewer("cesiumContainer");
-
-// Set terrain provider as Cesium World Terrain using ion asset id 1
-viewer.scene.setTerrain(
-  new Cesium.Terrain(
-    Cesium.CesiumTerrainProvider.fromIonAssetId(1),
-  ),
-);
-viewer.scene.globe.depthTestAgainstTerrain = true;
-
-// --- Google Photorealistic 3D Tiles (for realistic buildings/trees) ---
-try {
-  const google3dTiles = await Cesium.Cesium3DTileset.fromIonAssetId(2275202);
-  viewer.scene.primitives.add(google3dTiles);
-} catch (error) {
-  console.log("Photorealistic 3D Tiles error:", error);
-}
-
-// --- Lilydale to Warburton Rail Trail (thick white line, clamped) ---
-try {
-  const railTrailRes = await Cesium.IonResource.fromAssetId(3676196);
-  const railTrailSource = await Cesium.GeoJsonDataSource.load(railTrailRes, {
-    clampToGround: true
-  });
-  await viewer.dataSources.add(railTrailSource);
-
-  railTrailSource.entities.values.forEach(entity => {
-    if (entity.polyline) {
-      entity.polyline.width = 6; // thick
-      entity.polyline.material = Cesium.Color.WHITE;
-      entity.polyline.clampToGround = true; // ensure on terrain
-    }
+  var viewer = new Cesium.Viewer("cesiumContainer", {
+    timeline:false, animation:false, geocoder:false, homeButton:true
   });
 
-  await viewer.zoomTo(railTrailSource); // focus the scene on the trail
-} catch (error) {
-  console.log("Rail Trail load error:", error);
-}
-
-// --- Waypoints styled by 'Name' (PointGraphics) ---
-try {
-  const waypointsRes = await Cesium.IonResource.fromAssetId(3676193);
-  const waypointsSource = await Cesium.GeoJsonDataSource.load(waypointsRes, {
-    clampToGround: true
-  });
-  await viewer.dataSources.add(waypointsSource);
-
-  waypointsSource.entities.values.forEach(entity => {
-    const nameProp = entity.properties && entity.properties.Name;
-    const name = nameProp ? String(nameProp.getValue()) : "";
-
-    // Category → color mapping
-    let color = Cesium.Color.YELLOW;              // default
-    if (/car ?park/i.test(name))               color = Cesium.Color.GRAY;       // Car park
-    else if (/toilet/i.test(name))             color = Cesium.Color.BLUE;       // Toilet
-    else if (/picnic( table)?s?/i.test(name))  color = Cesium.Color.GREEN;      // Picnic tables
-    else if (/bbq|barbecue/i.test(name))       color = Cesium.Color.ORANGERED;  // BBQ
-    else if (/drinking water|water/i.test(name)) color = Cesium.Color.CYAN;     // Drinking water
-    else if (/lookout|view/i.test(name))       color = Cesium.Color.PURPLE;     // Lookout/View
-
-    entity.point = new Cesium.PointGraphics({
-      pixelSize: 10,
-      color: color,
-      outlineColor: Cesium.Color.WHITE,
-      outlineWidth: 1
-    });
+  // Terrain
+  Cesium.CesiumTerrainProvider.fromIonAssetId(1).then(function(tp){
+    viewer.terrainProvider = tp;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
   });
 
-} catch (error) {
-  console.log("Waypoints load error:", error);
-}
+  // Google Photorealistic 3D Tiles (optional)
+  Cesium.Cesium3DTileset.fromIonAssetId(2275202)
+    .then(function(tiles){ viewer.scene.primitives.add(tiles); })
+    .catch(function(e){ console.warn("3D Tiles optional:", e); });
+
+  // Rail trail (ID: 3676196) – thick white, clamped
+  Cesium.IonResource.fromAssetId(3676196)
+    .then(function(res){ return Cesium.GeoJsonDataSource.load(res, {clampToGround:true}); })
+    .then(function(ds){
+      viewer.dataSources.add(ds);
+      ds.entities.values.forEach(function(e){
+        if (e.polyline){
+          e.polyline.width = 6;
+          e.polyline.material = Cesium.Color.WHITE;
+          e.polyline.clampToGround = true;
+        }
+      });
+      return viewer.zoomTo(ds);
+    })
+    .catch(function(e){ console.error("Rail trail load error:", e); });
+
+  // Waypoints (ID: 3676193) – style by Name via PointGraphics
+  Cesium.IonResource.fromAssetId(3676193)
+    .then(function(res){ return Cesium.GeoJsonDataSource.load(res, {clampToGround:true}); })
+    .then(function(ds){
+      viewer.dataSources.add(ds);
+      ds.entities.values.forEach(function(e){
+        var name = (e.properties && e.properties.Name) ? String(e.properties.Name.getValue()) : "";
+        var color = Cesium.Color.YELLOW;
+        if (/car ?park/i.test(name))               color = Cesium.Color.GRAY;
+        else if (/toilet/i.test(name))             color = Cesium.Color.BLUE;
+        else if (/picnic( table)?s?/i.test(name))  color = Cesium.Color.GREEN;
+        else if (/bbq|barbecue/i.test(name))       color = Cesium.Color.ORANGERED;
+        else if (/drinking water|water/i.test(name)) color = Cesium.Color.CYAN;
+        else if (/lookout|view/i.test(name))       color = Cesium.Color.PURPLE;
+
+        e.point = new Cesium.PointGraphics({
+          pixelSize:10, color:color,
+          outlineColor:Cesium.Color.WHITE, outlineWidth:1
+        });
+      });
+    })
+    .catch(function(e){ console.error("Waypoints load error:", e); });
+</script>
+</body>
+</html>
